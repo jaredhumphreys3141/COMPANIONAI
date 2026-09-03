@@ -17,12 +17,22 @@ def isolated_home(tmp_path, monkeypatch):
     from companionai import paths
 
     importlib.reload(paths)
-    for module_name in ("config", "net", "catalog", "character"):
+    # recall and memory bind their storage paths at import, so they have to be
+    # reloaded after paths - and in dependency order.
+    for module_name in ("config", "net", "catalog", "character", "recall", "memory"):
         module = importlib.import_module(f"companionai.{module_name}")
         importlib.reload(module)
 
     import companionai.config as config
+    import companionai.session as session
 
     config._settings = None
+    import companionai.memory as memory_mod
+
+    memory_mod.reset_cache()
+    # The session holds the active character and would otherwise carry a
+    # companion from a previous test into this test's empty data directory.
+    session._session = None
     paths.ensure_dirs()
     yield tmp_path
+    session._session = None

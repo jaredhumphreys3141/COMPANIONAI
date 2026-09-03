@@ -71,7 +71,15 @@ def _err(exc: Exception) -> str:
 def _net_badge() -> str:
     status = net.status()
     css_class = "net-offline" if not status.allowed else "net-online"
-    return f"<span class='net-badge {css_class}'>{status.badge}</span>"
+    short = "OFFLINE" if not status.allowed else "ONLINE"
+    # Both labels are emitted and CSS picks one, so a 7" Pi touchscreen shows
+    # "OFFLINE" while a desktop shows the full sentence.
+    return (
+        f"<span class='net-badge {css_class}' title='{status.badge}'>"
+        f"<span class='net-badge-long'>{status.badge}</span>"
+        f"<span class='net-badge-short'>{short}</span>"
+        "</span>"
+    )
 
 
 def _character_choices() -> list[str]:
@@ -149,11 +157,12 @@ def build() -> gr.Blocks:
         with gr.Row(elem_classes="companion-header"):
             gr.HTML("<h1>CompanionAI</h1>")
             net_badge = gr.HTML(_net_badge())
-            header_status = gr.Markdown(state.summary())
+            header_status = gr.Markdown(state.summary(), elem_classes="companion-subtle")
 
         with gr.Tabs():
-            _talk_tab(state, net_badge, header_status)
-            studio_refs = _studio_tab(state, header_status)
+            talk_refs = _talk_tab(state, net_badge, header_status)
+            studio_refs = _studio_tab(state, header_status, talk_refs)
+            _memory_tab(state)
             _images_tab(state)
             _models_tab(state, net_badge, studio_refs)
             _settings_tab(state, net_badge)
@@ -165,8 +174,8 @@ def build() -> gr.Blocks:
 # --------------------------------------------------------------------------- #
 # Talk
 # --------------------------------------------------------------------------- #
-def _talk_tab(state: session.Session, net_badge, header_status) -> None:
-    with gr.Tab("Talk"):
+def _talk_tab(state: session.Session, net_badge, header_status) -> dict:
+    with gr.Tab("Talk") as talk_tab:
         with gr.Row():
             with gr.Column(scale=3):
                 chat = _chatbot(
@@ -191,9 +200,14 @@ def _talk_tab(state: session.Session, net_badge, header_status) -> None:
                 )
 
             with gr.Column(scale=1, min_width=240):
+                # Guard against the active companion having been deleted from
+                # disk: an out-of-range value renders as a blank dropdown.
+                _choices = _character_choices()
+                _active = (state.character.id if state.character.id in _choices
+                           else (_choices[0] or None))
                 who = gr.Dropdown(
-                    choices=_character_choices(),
-                    value=state.character.id,
+                    choices=_choices,
+                    value=_active,
                     label="Companion",
                     interactive=True,
                 )
@@ -286,9 +300,9 @@ def _talk_tab(state: session.Session, net_badge, header_status) -> None:
         who.change(switch, who, [chat, status, header_status])
 
         def clear():
-            state.conversation.reset()
-            state.silence()
-            return [{"role": "assistant", "content": state.character.greeting}], "New conversation."
+            state.new_conversation()
+            return ([{"role": "assistant", "content": state.character.greeting}],
+                    "New conversation.  Long-term memory is kept.")
 
         clear_btn.click(clear, None, [chat, status], queue=False)
 
@@ -312,11 +326,20 @@ def _talk_tab(state: session.Session, net_badge, header_status) -> None:
 
         timer.tick(poll, None, [chat, status, net_badge])
 
+        # The dropdown's choices are baked in when the page is built, so
+        # companions created later have to be pushed in.  The Studio does that
+        # directly; re-reading on tab open covers everything else.
+        talk_tab.select(
+            lambda: gr.update(choices=_character_choices()), None, who, queue=False
+        )
+
+    return {"who": who, "chat": chat, "status": status}
+
 
 # --------------------------------------------------------------------------- #
 # Character Studio
 # --------------------------------------------------------------------------- #
-def _studio_tab(state: session.Session, header_status) -> dict:
+def _studio_tab(state: session.Session, header_status, talk_refs: dict) -> dict:
     character = state.character
 
     with gr.Tab("Studio"):
@@ -472,24 +495,32 @@ def _studio_tab(state: session.Session, header_status) -> dict:
             try:
                 updated.save()
             except OSError as exc:
-                return (gr.update(), f"Could not save: {exc}", gr.update(), gr.update())
+                return (gr.update(), f"Could not save: {exc}", gr.update(),
+                        gr.update(), gr.update())
             if activate or updated.id == state.character.id:
                 state.refresh_character(updated)
             note = f"Saved **{updated.name}**."
             if missing:
                 listed = ", ".join(f"{kind}:{model}" for kind, model in missing)
                 note += f"  Still to install from the Models tab: {listed}."
+            # Only move the Talk tab's selection when this companion actually
+            # became the active one; a plain Save must not reset the chat.
+            talk_update = gr.update(choices=_character_choices())
+            if activate:
+                talk_update = gr.update(choices=_character_choices(), value=updated.id)
             return (
                 gr.update(choices=_character_choices(), value=updated.id),
                 note,
                 updated.system_prompt(),
                 state.summary(),
+                talk_update,
             )
 
-        save_btn.click(save, inputs, [picker, studio_status, prompt_preview, header_status])
+        save_btn.click(save, inputs,
+                       [picker, studio_status, prompt_preview, header_status, talk_refs["who"]])
         activate_btn.click(
             lambda *values: save(*values, activate=True),
-            inputs, [picker, studio_status, prompt_preview, header_status],
+            inputs, [picker, studio_status, prompt_preview, header_status, talk_refs["who"]],
         )
 
         def load_character(character_id: str):
@@ -518,9 +549,10 @@ def _studio_tab(state: session.Session, header_status) -> dict:
                 gr.update(choices=_character_choices(), value=fresh.id),
                 f"Created **{fresh.name}** with defaults for this hardware.",
                 "",
+                gr.update(choices=_character_choices(), value=fresh.id),
             )
 
-        new_btn.click(create, new_name, [picker, studio_status, new_name])
+        new_btn.click(create, new_name, [picker, studio_status, new_name, talk_refs["who"]])
 
         def duplicate(name_value: str, *values):
             source = _current(list(values))
@@ -530,26 +562,29 @@ def _studio_tab(state: session.Session, header_status) -> dict:
                 gr.update(choices=_character_choices(), value=clone.id),
                 f"Duplicated to **{clone.name}**.",
                 "",
+                gr.update(choices=_character_choices()),
             )
 
-        dup_btn.click(duplicate, [new_name] + inputs, [picker, studio_status, new_name])
+        dup_btn.click(duplicate, [new_name] + inputs,
+                      [picker, studio_status, new_name, talk_refs["who"]])
 
         def delete(character_id: str):
             ids = character_mod.list_ids()
             if len(ids) <= 1:
-                return gr.update(), "Keep at least one companion."
+                return gr.update(), "Keep at least one companion.", gr.update()
             try:
                 character_mod.Character.load(character_id).delete()
             except Exception as exc:
-                return gr.update(), _err(exc)
+                return gr.update(), _err(exc), gr.update()
             remaining = character_mod.list_ids()
             state.use_character(remaining[0])
             return (
                 gr.update(choices=remaining, value=remaining[0]),
                 f"Deleted `{character_id}`.",
+                gr.update(choices=remaining, value=remaining[0]),
             )
 
-        del_btn.click(delete, picker, [picker, studio_status])
+        del_btn.click(delete, picker, [picker, studio_status, talk_refs["who"]])
 
         def preview_voice(*values):
             updated = _current(list(values))
@@ -594,6 +629,122 @@ def _studio_tab(state: session.Session, header_status) -> dict:
 
     return {"picker": picker, "llm": llm_model, "tts": voice_dd,
             "asr": asr_model, "image": image_model}
+
+
+# --------------------------------------------------------------------------- #
+# Memory
+# --------------------------------------------------------------------------- #
+def _memory_tab(state: session.Session) -> None:
+    settings = config.get()
+
+    with gr.Tab("Memory") as memory_tab:
+        gr.Markdown(
+            "What your companion remembers between conversations.  Everything here is "
+            "editable: a small local model is an imperfect note-taker, so you can "
+            "correct it, and you can see exactly what it thinks it knows."
+        )
+        with gr.Row():
+            with gr.Column(scale=2):
+                facts = gr.Textbox(
+                    label="Facts", lines=12, value=state.memory.as_text(),
+                    info="One per line.  Start a line with * to pin it, so it is never "
+                         "dropped when the list fills up.",
+                )
+                summary = gr.Textbox(
+                    label="Story so far", lines=4, value=state.memory.summary,
+                    info="A rolling summary of everything older than the live "
+                         "conversation window.",
+                )
+                with gr.Row():
+                    save_btn = gr.Button("Save memory", variant="primary", scale=2)
+                    extract_btn = gr.Button("Remember this conversation now", scale=2)
+                memory_status = gr.Markdown("", elem_classes="status-line")
+
+            with gr.Column(scale=1, min_width=250):
+                gr.Markdown("### Status")
+                stats = gr.Markdown(state.memory.stats_markdown())
+                refresh_btn = gr.Button("Refresh", size="sm")
+
+                gr.Markdown("### Behaviour")
+                enabled = gr.Checkbox(value=settings.memory_enabled,
+                                      label="Remember between conversations")
+                summarise = gr.Checkbox(value=settings.memory_summarise,
+                                        label="Keep a rolling summary")
+                recall_on = gr.Checkbox(value=settings.recall_enabled,
+                                        label="Search past conversations")
+                resume_on = gr.Checkbox(value=settings.resume_conversations,
+                                        label="Reopen the last conversation on start-up")
+                every = gr.Slider(1, 10, settings.memory_extract_every, step=1,
+                                  label="Exchanges between memory passes")
+                max_facts = gr.Slider(5, 60, settings.memory_max_facts, step=1,
+                                      label="Maximum facts kept")
+                top_k = gr.Slider(1, 8, settings.recall_top_k, step=1,
+                                  label="Recalled lines per message")
+                apply_btn = gr.Button("Apply", variant="primary", size="sm")
+
+        with gr.Accordion("Forget everything", open=False):
+            gr.Markdown(
+                "Deletes every remembered fact, the summary and the searchable history "
+                "for **this companion**.  Saved transcripts on disk are left alone."
+            )
+            confirm = gr.Checkbox(value=False, label="Yes, erase this companion's memory")
+            forget_btn = gr.Button("Forget everything", variant="stop")
+
+        # ---------------------------------------------------------- handlers
+        def reload_view():
+            return (state.memory.as_text(), state.memory.summary,
+                    state.memory.stats_markdown())
+
+        def save_memory(facts_text, summary_text):
+            state.memory.set_from_text(facts_text)
+            state.memory.summary = (summary_text or "").strip()
+            state.memory.save()
+            return state.memory.stats_markdown(), "Memory saved."
+
+        save_btn.click(save_memory, [facts, summary], [stats, memory_status])
+
+        def extract_now():
+            try:
+                note = state.remember_now()
+            except Exception as exc:
+                return gr.update(), gr.update(), gr.update(), _err(exc)
+            return (*reload_view(), note)
+
+        extract_btn.click(extract_now, None, [facts, summary, stats, memory_status])
+        refresh_btn.click(lambda: (*reload_view(), ""), None,
+                          [facts, summary, stats, memory_status], queue=False)
+        memory_tab.select(lambda: reload_view(), None, [facts, summary, stats],
+                          queue=False)
+
+        def apply_settings(enabled_v, summarise_v, recall_v, resume_v, every_v,
+                           max_v, topk_v):
+            config.update(
+                memory_enabled=bool(enabled_v),
+                memory_summarise=bool(summarise_v),
+                recall_enabled=bool(recall_v),
+                resume_conversations=bool(resume_v),
+                memory_extract_every=int(every_v),
+                memory_max_facts=int(max_v),
+                recall_top_k=int(topk_v),
+            )
+            return "Memory settings saved."
+
+        apply_btn.click(
+            apply_settings,
+            [enabled, summarise, recall_on, resume_on, every, max_facts, top_k],
+            memory_status,
+        )
+
+        def forget(confirmed):
+            if not confirmed:
+                return gr.update(), gr.update(), gr.update(), gr.update(), (
+                    "Tick the confirmation box first."
+                )
+            state.memory.forget()
+            return (*reload_view(), False,
+                    f"**{state.character.name}** no longer remembers anything.")
+
+        forget_btn.click(forget, confirm, [facts, summary, stats, confirm, memory_status])
 
 
 # --------------------------------------------------------------------------- #

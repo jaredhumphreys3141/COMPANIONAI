@@ -21,15 +21,13 @@ from . import (
     llm,
     net,
     paths,
+    recall,
     tts,
     voice,
 )
-from . import (
-    character as character_mod,
-)
-from . import (
-    conversation as conversation_mod,
-)
+from . import character as character_mod
+from . import conversation as conversation_mod
+from . import memory as memory_mod
 
 
 class Session:
@@ -37,13 +35,84 @@ class Session:
         paths.ensure_dirs()
         net.init()
         self.character = character_mod.ensure_default()
-        self.conversation = conversation_mod.Conversation(self.character)
+        self.memory = memory_mod.for_character(self.character.id)
+        self.conversation = self._new_conversation(resume=True)
         self.speak_replies = True          # play audio on the device's speakers
+        self._pending: list[tuple[str, str]] = []
+        self._memory_lock = threading.Lock()
         self.status = "idle"
         self._speech_queue: queue.Queue[str | None] = queue.Queue()
         self._speech_thread: threading.Thread | None = None
         self._last_reply_audio: tuple[int, np.ndarray] | None = None
         self._busy = threading.Lock()
+
+    # --------------------------------------------------------------- memory
+    def _new_conversation(self, resume: bool = False):
+        """Start a conversation, optionally reopening the last saved one."""
+        conversation = conversation_mod.Conversation(self.character, self.memory)
+        if resume and config.get().resume_conversations:
+            if conversation.resume():
+                return conversation
+        self.memory.conversations += 1
+        self.memory.save()
+        return conversation
+
+    def _remember(self, user_text: str, reply_text: str) -> None:
+        """Index the exchange and, periodically, distil it into memory.
+
+        Runs on a background thread after the reply has been spoken: an extra
+        model call costs seconds on a Pi, and the point of the whole streaming
+        pipeline is that the user never waits for one.
+
+        Exchanges are buffered by value rather than re-read from the live
+        conversation, because these threads can overlap and finish out of
+        order - reading the conversation later would extract facts against
+        whatever was said most recently instead of the exchange this pass is
+        actually for.
+        """
+        settings = config.get()
+        if not settings.memory_enabled:
+            return
+        character_id = self.character.id
+        try:
+            with self._memory_lock:
+                if settings.recall_enabled:
+                    recall.index().add(character_id, "user", user_text)
+                    recall.index().add(character_id, self.character.name, reply_text)
+
+                self.memory.messages += 2
+                self._pending.append((user_text, reply_text))
+                if len(self._pending) < max(1, settings.memory_extract_every):
+                    self.memory.save()
+                    return
+
+                batch, self._pending = self._pending, []
+                turns = []
+                for said, replied in batch:
+                    turns.append(conversation_mod.Turn("user", said))
+                    turns.append(conversation_mod.Turn("assistant", replied))
+                memory_mod.extract(self.memory, self.character, turns, llm.engine())
+        except Exception as exc:  # memory is a nicety; never break the session
+            self.status = f"memory error: {exc}"
+
+    def new_conversation(self) -> None:
+        """Start a fresh conversation, leaving long-term memory intact."""
+        self.silence()
+        self.conversation = self._new_conversation(resume=False)
+
+    def remember_now(self) -> str:
+        """Run an extraction pass immediately - the Memory tab's button."""
+        with self.conversation.lock:
+            recent = list(self.conversation.turns[-12:])
+        if not recent:
+            return "Nothing to remember yet - have a conversation first."
+        added, summarised = memory_mod.extract(
+            self.memory, self.character, recent, llm.engine()
+        )
+        parts = [f"{added} new fact{'s' if added != 1 else ''}"]
+        if summarised:
+            parts.append("summary updated")
+        return "Remembered: " + ", ".join(parts) + "."
 
     # ------------------------------------------------------------ character
     def use_character(self, character_id: str) -> str:
@@ -54,7 +123,9 @@ class Session:
         except (OSError, ValueError) as exc:
             return f"Could not load '{character_id}': {exc}"
         config.update(active_character=character_id)
-        self.conversation = conversation_mod.Conversation(self.character)
+        self.memory = memory_mod.for_character(self.character.id)
+        self._pending = []
+        self.conversation = self._new_conversation(resume=True)
         llm.engine().unload()
         return f"{self.character.name} is now active."
 
@@ -135,8 +206,10 @@ class Session:
             voice.loop().interrupted.clear()
             tts.player().resume()
             spoke_anything = False
+            reply_text = ""
             try:
                 for full, sentence in self.conversation.stream_reply(user_text):
+                    reply_text = full
                     if voice.loop().interrupted.is_set():
                         self.conversation.stop()
                         self.silence()
@@ -156,6 +229,13 @@ class Session:
                 voice.loop().speaking.clear()
                 if self.status != "interrupted":
                     self.status = "idle"
+                # Distil the exchange into memory once the talking is over, so
+                # the extra model call never sits between question and answer.
+                if user_text.strip() and reply_text.strip():
+                    threading.Thread(
+                        target=self._remember, args=(user_text, reply_text),
+                        daemon=True, name="companion-memory",
+                    ).start()
 
     def _wait_for_speech(self, timeout: float = 120.0) -> None:
         deadline = time.time() + timeout

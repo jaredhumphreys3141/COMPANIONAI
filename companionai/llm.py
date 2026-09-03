@@ -58,6 +58,10 @@ class LlamaCppEngine:
         self._llm = None
         self._key: tuple | None = None
         self._lock = threading.Lock()
+        # One llama.cpp context is not safe to generate from concurrently, and
+        # memory extraction runs on a background thread while the user may be
+        # sending the next message.  Generations queue instead of colliding.
+        self._gen_lock = threading.RLock()
         self.cancel = threading.Event()
 
     # ------------------------------------------------------------------ load
@@ -123,13 +127,16 @@ class LlamaCppEngine:
         )
         if character.seed is not None and character.seed >= 0:
             kwargs["seed"] = character.seed
-        for chunk in self._llm.create_chat_completion(**kwargs):
-            if self.cancel.is_set():
-                break
-            delta = chunk["choices"][0].get("delta", {})
-            piece = delta.get("content")
-            if piece:
-                yield piece
+        # Held for the life of the generator; released when it finishes or the
+        # caller closes it.
+        with self._gen_lock:
+            for chunk in self._llm.create_chat_completion(**kwargs):
+                if self.cancel.is_set():
+                    break
+                delta = chunk["choices"][0].get("delta", {})
+                piece = delta.get("content")
+                if piece:
+                    yield piece
 
 
 class OllamaEngine:
