@@ -44,6 +44,15 @@ class Settings:
     min_speech_ms: int = 250     # ignore shorter blips (door slams, keyboard)
     barge_in: bool = True        # let the user interrupt the companion
 
+    # -- memory -------------------------------------------------------------
+    memory_enabled: bool = True
+    memory_summarise: bool = True        # keep a rolling precis of older turns
+    memory_max_facts: int = 20           # cap on facts injected into the prompt
+    memory_extract_every: int = 3        # exchanges between extraction passes
+    recall_enabled: bool = True          # keyword search over past conversations
+    recall_top_k: int = 3
+    resume_conversations: bool = True    # reopen the last chat on start-up
+
     # -- runtime ------------------------------------------------------------
     active_character: str = ""
     save_transcripts: bool = True

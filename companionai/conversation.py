@@ -32,12 +32,14 @@ class Turn:
 class Conversation:
     """History plus the reply generator for one companion."""
 
-    def __init__(self, character) -> None:
+    def __init__(self, character, memory=None) -> None:
         self.character = character
+        self.memory = memory
         self.turns: list[Turn] = []
         self.lock = threading.Lock()
         self.stop_flag = threading.Event()
         self.started = time.strftime("%Y%m%d-%H%M%S")
+        self.resumed = False
 
     # ------------------------------------------------------------- history
     def reset(self) -> None:
@@ -50,13 +52,68 @@ class Conversation:
             self.turns.append(Turn(role, content))
 
     def messages(self) -> list[dict]:
-        """System prompt plus the most recent exchanges, within the memory window."""
+        """System prompt plus the most recent exchanges, within the memory window.
+
+        Long-term memory rides in the system prompt: facts, the rolling summary
+        and any recalled lines relevant to what was just said.  Only the last
+        ``memory_turns`` exchanges appear verbatim, so the prompt stays a fixed
+        size however long the relationship runs.
+        """
         keep = max(2, self.character.memory_turns * 2)
         with self.lock:
             recent = self.turns[-keep:]
-        return [{"role": "system", "content": self.character.system_prompt()}] + [
+            latest_user = next(
+                (t.content for t in reversed(self.turns) if t.role == "user"), ""
+            )
+
+        system = self.character.system_prompt()
+        if self.memory is not None:
+            block = self.memory.prompt_block(
+                self.character, latest_user, exclude={t.content for t in recent}
+            )
+            if block:
+                system = f"{system}\n\n{block}"
+
+        return [{"role": "system", "content": system}] + [
             {"role": turn.role, "content": turn.content} for turn in recent
         ]
+
+    # ------------------------------------------------------------- resuming
+    def latest_transcript(self):
+        """Newest saved transcript for this companion, or None."""
+        folder = paths.HOME / "transcripts"
+        if not folder.is_dir():
+            return None
+        files = sorted(
+            folder.glob(f"{self.character.id}-*.json"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+        return files[0] if files else None
+
+    def resume(self) -> int:
+        """Reload the most recent conversation.  Returns how many turns came back."""
+        path = self.latest_transcript()
+        if path is None:
+            return 0
+        try:
+            data = json.loads(path.read_text("utf-8"))
+            saved = data.get("turns", [])
+        except (OSError, json.JSONDecodeError, AttributeError):
+            return 0
+        restored = [
+            Turn(t["role"], t["content"], t.get("time", ""))
+            for t in saved
+            if isinstance(t, dict) and t.get("role") in ("user", "assistant") and t.get("content")
+        ]
+        if not restored:
+            return 0
+        with self.lock:
+            self.turns = restored
+            # Keep writing to the same file rather than orphaning it.
+            self.started = data.get("started") or path.stem.split("-", 1)[-1]
+            self.resumed = True
+        return len(restored)
 
     def as_chat_pairs(self) -> list[dict]:
         """Gradio ``messages``-format history."""
