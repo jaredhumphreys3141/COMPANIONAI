@@ -15,6 +15,10 @@ User=%i
 WorkingDirectory=/opt/companionai
 Environment=COMPANIONAI_HOME=/var/lib/companionai
 # 0.0.0.0 makes the interface reachable from other devices on the LAN.
+#
+# SET A PASSWORD FIRST.  With no sign-in, anyone who can reach this port can
+# talk to your companion and read its transcripts.  Settings -> Runtime ->
+# Sign-in, or bind 127.0.0.1 below and reach it over an SSH tunnel instead.
 ExecStart=/opt/companionai/.venv/bin/python -m companionai --host 0.0.0.0 --no-browser
 Restart=on-failure
 RestartSec=5

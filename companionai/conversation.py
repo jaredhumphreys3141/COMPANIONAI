@@ -40,6 +40,11 @@ class Conversation:
         self.stop_flag = threading.Event()
         self.started = time.strftime("%Y%m%d-%H%M%S")
         self.resumed = False
+        # Text actually handed to the voice, as distinct from text generated.
+        # They differ the moment the user interrupts.
+        self.dispatched = ""
+        self._spoken_text: str | None = None
+        self._keep_spoken_only = False
 
     # ------------------------------------------------------------- history
     def reset(self) -> None:
@@ -121,7 +126,21 @@ class Conversation:
             return [{"role": turn.role, "content": turn.content} for turn in self.turns]
 
     # ---------------------------------------------------------------- reply
-    def stop(self) -> None:
+    def stop(self, spoken_only: bool = False, spoken_text: str | None = None) -> None:
+        """Halt generation.
+
+        ``spoken_only`` records that the user cut the companion off out loud, so
+        only what they actually heard is kept.  A Stop button press in a text
+        conversation keeps the whole reply, because the user read all of it.
+
+        ``spoken_text`` is what the speaker finished playing.  The caller has to
+        supply it: sentences handed to the speech queue are dropped when the
+        queue is flushed on a barge-in, so "dispatched" over-counts what was
+        heard by however much the model ran ahead of the voice.
+        """
+        self._keep_spoken_only = spoken_only
+        if spoken_text is not None:
+            self._spoken_text = spoken_text
         self.stop_flag.set()
         engine = llm.engine()
         if hasattr(engine, "cancel"):
@@ -134,6 +153,9 @@ class Conversation:
         text ready to be spoken whenever a sentence boundary is crossed.
         """
         self.stop_flag.clear()
+        self._keep_spoken_only = False
+        self._spoken_text = None
+        self.dispatched = ""
         if user_text.strip():
             self.add("user", user_text.strip())
 
@@ -148,15 +170,27 @@ class Conversation:
             buffer += piece
             sentence, buffer = _split_ready(buffer)
             if sentence:
+                self.dispatched += (" " if self.dispatched else "") + sentence
                 yield full, sentence
             else:
                 yield full, ""
 
         tail = buffer.strip()
         if tail and not self.stop_flag.is_set():
+            self.dispatched += (" " if self.dispatched else "") + tail
             yield full, tail
 
-        cleaned = _tidy(full)
+        # Storing text the user never heard would have the companion believe it
+        # said things it did not - and that belief then feeds context, the
+        # transcript and memory extraction.
+        if self._keep_spoken_only:
+            # What the speaker finished, when the caller knows; otherwise the
+            # sentences handed out, which is still far closer than everything
+            # the model managed to generate.
+            heard = self._spoken_text if self._spoken_text is not None else self.dispatched
+        else:
+            heard = full
+        cleaned = _tidy(heard)
         if cleaned:
             self.add("assistant", cleaned)
             if config.get().save_transcripts:

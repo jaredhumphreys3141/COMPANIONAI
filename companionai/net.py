@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import secrets
 import shutil
 import threading
 import time
@@ -280,6 +281,55 @@ def snapshot_download(repo_id: str, dest: Path, *, allow_patterns: list[str] | N
     )
     _audit("downloaded", repo_id, f"saved to {path}", True)
     return Path(path)
+
+
+# --------------------------------------------------------------------------- #
+# interface sign-in
+# --------------------------------------------------------------------------- #
+def set_password(password: str, username: str = "") -> bool:
+    """Set (or with an empty password, clear) the sign-in for the web UI."""
+    settings = config.get()
+    username = (username or settings.ui_username or "companion").strip()
+    if not password:
+        config.update(ui_password_hash="", ui_password_salt="", ui_username=username)
+        _audit("auth", "interface", "sign-in disabled", True)
+        return False
+    salt = secrets.token_hex(16)
+    config.update(
+        ui_username=username,
+        ui_password_salt=salt,
+        ui_password_hash=_hash_password(password, salt),
+    )
+    _audit("auth", "interface", f"sign-in enabled for {username!r}", True)
+    return True
+
+
+def _hash_password(password: str, salt: str) -> str:
+    return hashlib.pbkdf2_hmac(
+        "sha256", password.encode(), bytes.fromhex(salt), 240_000
+    ).hex()
+
+
+def password_set() -> bool:
+    settings = config.get()
+    return bool(settings.ui_password_hash and settings.ui_password_salt)
+
+
+def check_login(username: str, password: str) -> bool:
+    """Gradio's auth callback.  Constant-time, so it leaks no timing signal."""
+    settings = config.get()
+    if not password_set():
+        return True
+    expected = _hash_password(password or "", settings.ui_password_salt)
+    return (
+        secrets.compare_digest(username or "", settings.ui_username)
+        and secrets.compare_digest(expected, settings.ui_password_hash)
+    )
+
+
+def is_public_bind(host: str) -> bool:
+    """True when this address exposes the interface beyond this machine."""
+    return (host or "").strip() not in ("127.0.0.1", "localhost", "::1", "")
 
 
 def disk_free_gb(path: Path | None = None) -> float:

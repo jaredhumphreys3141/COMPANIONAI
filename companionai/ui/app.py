@@ -14,6 +14,8 @@ any front-end code.  Six tabs:
 
 from __future__ import annotations
 
+import sys
+
 import gradio as gr
 
 from .. import (
@@ -898,6 +900,18 @@ built-in catalogue.
             )
 
 
+def _sign_in_note() -> str:
+    settings = config.get()
+    if net.password_set():
+        return f"Sign-in is **on** for `{settings.ui_username}`."
+    if net.is_public_bind(settings.host):
+        return (
+            f"Sign-in is **off** and the app binds `{settings.host}`, so anyone on your "
+            "network can use it.  Set a password below."
+        )
+    return "Sign-in is **off**.  That is fine while the app only listens on this machine."
+
+
 def _gate_note() -> str:
     status = net.status()
     if status.allowed:
@@ -1021,6 +1035,16 @@ Your conversations, audio and images are never uploaded, whatever this is set to
                                       label="Save conversation transcripts to disk")
             ui_theme = gr.Radio(["soft", "default", "monochrome", "glass"],
                                 value=settings.theme, label="Theme (applies on restart)")
+            gr.Markdown("#### Sign-in")
+            sign_in_state = gr.Markdown(_sign_in_note())
+            with gr.Row():
+                ui_user = gr.Textbox(value=settings.ui_username, label="Username", scale=1)
+                ui_pass = gr.Textbox(
+                    value="", label="Password", type="password", scale=1,
+                    info="Leave empty and press Set to turn sign-in off.",
+                )
+                set_login = gr.Button("Set", variant="primary", scale=1)
+
             host = gr.Textbox(value=settings.host, label="Bind address",
                               info="127.0.0.1 keeps the UI on this machine; "
                                    "0.0.0.0 lets other devices on your LAN reach it.")
@@ -1051,6 +1075,18 @@ Your conversations, audio and images are never uploaded, whatever this is set to
                 [backend, ollama_url, transcripts, ui_theme, host, port],
                 runtime_note,
             )
+
+            def apply_login(username, password):
+                enabled = net.set_password(password or "", username or "")
+                note = (
+                    "Sign-in enabled.  It takes effect next launch."
+                    if enabled else
+                    "Sign-in turned off.  Anyone who can reach the port can use the app."
+                )
+                return _sign_in_note(), "", note
+
+            set_login.click(apply_login, [ui_user, ui_pass],
+                            [sign_in_state, ui_pass, runtime_note])
 
 
 # --------------------------------------------------------------------------- #
@@ -1120,13 +1156,24 @@ def launch(host: str | None = None, port: int | None = None, share: bool = False
     settings = config.get()
     demo = build()
     demo.queue(default_concurrency_limit=4)
+    bind = host or settings.host
     launch_kwargs = dict(
-        server_name=host or settings.host,
+        server_name=bind,
         server_port=int(port or settings.port),
         share=share,               # off unless the user explicitly asks for it
         inbrowser=settings.open_browser if open_browser is None else open_browser,
         show_api=False,
     )
+    if net.password_set():
+        launch_kwargs["auth"] = net.check_login
+        launch_kwargs["auth_message"] = "Sign in to your companion."
+    elif net.is_public_bind(bind):
+        print(
+            f"WARNING: the interface is bound to {bind} with no sign-in, so anyone "
+            "on your network can talk to your companion and read its transcripts.  "
+            "Set a password on the Settings tab, or bind 127.0.0.1.",
+            file=sys.stderr,
+        )
     if not _LEGACY_GRADIO:
         launch_kwargs.update(theme=theme(settings.theme), css=CSS)
 

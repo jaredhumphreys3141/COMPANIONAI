@@ -30,6 +30,13 @@ class Settings:
     )
 
     # -- server -------------------------------------------------------------
+    # Sign-in for the web interface.  Only the salted hash is stored, never the
+    # password itself.  Empty means no sign-in, which is fine on 127.0.0.1 and
+    # a bad idea on 0.0.0.0.
+    ui_username: str = "companion"
+    ui_password_hash: str = ""
+    ui_password_salt: str = ""
+
     host: str = "127.0.0.1"
     port: int = 7860
     open_browser: bool = True
