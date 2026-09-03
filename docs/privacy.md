@@ -54,14 +54,27 @@ Delete the directory and nothing remains. Move it with `COMPANIONAI_HOME` or
 
 ## Things that are not private
 
-- **`--host 0.0.0.0`** puts the interface on your LAN with no authentication.
-  Anyone who can reach the port can talk to your companion and read the
-  transcripts on screen.
+- **`--host 0.0.0.0`** puts the interface on your LAN. Set a password first —
+  Settings → Runtime → Sign-in. Without one, anyone who can reach the port can
+  talk to your companion and read its transcripts, and the app prints a warning
+  saying so at start-up. Only the salted hash of the password is stored
+  (PBKDF2-SHA256), never the password itself.
 - **`--share`** opens a public tunnel through Gradio's servers. It is off by
   default and prints a warning when you use it. The models still run locally,
   but the web interface is then reachable from the internet.
 - **Models you download** come from whoever published them and carry their own
   licences, listed in the Models tab.
+
+## Verifying the pipeline
+
+```bash
+companionai --smoke-test --allow-network
+```
+
+Installs the three smallest models, generates a reply, speaks it with Piper,
+transcribes that audio back with Whisper, and checks the words survived the
+round trip. It approves network access for the download only, then revokes it
+again — you can watch both in the activity log.
 
 ## Checking for yourself
 

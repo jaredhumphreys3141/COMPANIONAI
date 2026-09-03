@@ -51,6 +51,7 @@ Useful flags:
 | command | what it does |
 | --- | --- |
 | `companionai --doctor` | what is installed, what is missing, what is ready |
+| `companionai --smoke-test --allow-network` | prove the real models work end to end |
 | `companionai --list-devices` | microphones and speakers the app can see |
 | `companionai --host 0.0.0.0` | reachable from other devices on your LAN |
 | `companionai --home /mnt/ssd/companion` | keep models and settings elsewhere |
@@ -88,6 +89,8 @@ same features with a pause between turns.
   before they are imported.
 - `--share` (a public Gradio tunnel) is off unless you ask for it, and warns first.
 - The audit log lives at `~/.companionai/logs/network-audit.jsonl`.
+- The interface can require a password (Settings → Runtime → Sign-in). Set one
+  before binding to anything other than `127.0.0.1`; only a salted hash is stored.
 
 More detail in [docs/privacy.md](docs/privacy.md).
 

@@ -87,6 +87,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--list-devices", action="store_true",
                         help="list audio devices, then exit")
     parser.add_argument("--home", help="use this directory for models and settings")
+    parser.add_argument("--smoke-test", action="store_true",
+                        help="run the language, speech and transcription pipeline "
+                             "against real models, then exit")
+    parser.add_argument("--allow-network", action="store_true",
+                        help="with --smoke-test, download any missing models first")
     args = parser.parse_args(argv)
 
     if args.home:
@@ -101,6 +106,10 @@ def main(argv: list[str] | None = None) -> int:
     paths.ensure_dirs()
     net.init()
 
+    if args.smoke_test:
+        from .smoke import main as smoke_main
+
+        return smoke_main(allow_network=args.allow_network)
     if args.doctor:
         return _doctor()
     if args.list_devices:
@@ -119,7 +128,8 @@ def main(argv: list[str] | None = None) -> int:
     settings = config.get()
     host = args.host or settings.host
     port = args.port or settings.port
-    print(f"CompanionAI - http://{host}:{port}   ({net.status().badge})")
+    sign_in = "sign-in on" if net.password_set() else "no sign-in"
+    print(f"CompanionAI - http://{host}:{port}   ({net.status().badge}; {sign_in})")
     launch(host=host, port=port, share=args.share,
            open_browser=False if args.no_browser else None)
     return 0

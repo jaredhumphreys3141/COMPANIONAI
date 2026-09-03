@@ -42,6 +42,9 @@ class Session:
         self._memory_lock = threading.Lock()
         self.status = "idle"
         self._speech_queue: queue.Queue[str | None] = queue.Queue()
+        # Utterances the speaker finished, so an interrupted reply can be
+        # trimmed to what the user actually heard.
+        self._played: list[str] = []
         self._speech_thread: threading.Thread | None = None
         self._last_reply_audio: tuple[int, np.ndarray] | None = None
         self._busy = threading.Lock()
@@ -145,6 +148,7 @@ class Session:
             text = conversation_mod.speakable(item)
             if not text:
                 continue
+            finished = True
             try:
                 speaker = tts.speaker(self.character)
                 rate = getattr(speaker, "sample_rate", 22050)
@@ -157,7 +161,10 @@ class Session:
                         ).astype(np.int16)
                     rate = getattr(speaker, "sample_rate", rate)
                     if not player.play(rate, chunk):
+                        finished = False
                         break
+                if finished and not voice.loop().interrupted.is_set():
+                    self._played.append(item)
             except tts.TTSUnavailable as exc:
                 self.status = f"voice unavailable: {exc}"
             except Exception as exc:  # pragma: no cover - audio stacks vary
@@ -207,11 +214,15 @@ class Session:
             tts.player().resume()
             spoke_anything = False
             reply_text = ""
+            self._played = []
             try:
                 for full, sentence in self.conversation.stream_reply(user_text):
                     reply_text = full
                     if voice.loop().interrupted.is_set():
-                        self.conversation.stop()
+                        # Spoken interruption: keep only what the user heard.
+                        self.conversation.stop(
+                            spoken_only=True, spoken_text=" ".join(self._played)
+                        )
                         self.silence()
                         self.status = "interrupted"
                         break
