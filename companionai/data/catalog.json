@@ -1,0 +1,304 @@
+{
+  "comment": "Curated models CompanionAI knows how to install. Nothing here is downloaded until you approve network access in the GUI. Add your own entries to <data dir>/catalog.user.json using the same shape.",
+  "llm": [
+    {
+      "id": "qwen2.5-0.5b-instruct-q4",
+      "name": "Qwen2.5 0.5B Instruct (Q4_K_M)",
+      "kind": "gguf",
+      "url": "https://huggingface.co/bartowski/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf",
+      "filename": "Qwen2.5-0.5B-Instruct-Q4_K_M.gguf",
+      "size_mb": 400,
+      "license": "Apache-2.0",
+      "good_for": ["raspberry-pi-5", "jetson", "pc"],
+      "notes": "Smallest useful chat model. Very fast, limited depth."
+    },
+    {
+      "id": "qwen2.5-1.5b-instruct-q4",
+      "name": "Qwen2.5 1.5B Instruct (Q4_K_M)",
+      "kind": "gguf",
+      "url": "https://huggingface.co/bartowski/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf",
+      "filename": "Qwen2.5-1.5B-Instruct-Q4_K_M.gguf",
+      "size_mb": 1120,
+      "license": "Apache-2.0",
+      "good_for": ["raspberry-pi-5", "jetson", "pc"],
+      "notes": "Recommended default on a Raspberry Pi 5."
+    },
+    {
+      "id": "qwen2.5-3b-instruct-q4",
+      "name": "Qwen2.5 3B Instruct (Q4_K_M)",
+      "kind": "gguf",
+      "url": "https://huggingface.co/bartowski/Qwen2.5-3B-Instruct-GGUF/resolve/main/Qwen2.5-3B-Instruct-Q4_K_M.gguf",
+      "filename": "Qwen2.5-3B-Instruct-Q4_K_M.gguf",
+      "size_mb": 2100,
+      "license": "Qwen Research",
+      "good_for": ["jetson", "pc"],
+      "notes": "Recommended default on a Jetson or desktop."
+    },
+    {
+      "id": "llama-3.2-1b-instruct-q4",
+      "name": "Llama 3.2 1B Instruct (Q4_K_M)",
+      "kind": "gguf",
+      "url": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf",
+      "filename": "Llama-3.2-1B-Instruct-Q4_K_M.gguf",
+      "size_mb": 810,
+      "license": "Llama 3.2 Community",
+      "good_for": ["raspberry-pi-5", "jetson", "pc"],
+      "notes": "Warm conversational tone, small footprint."
+    },
+    {
+      "id": "llama-3.2-3b-instruct-q4",
+      "name": "Llama 3.2 3B Instruct (Q4_K_M)",
+      "kind": "gguf",
+      "url": "https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf",
+      "filename": "Llama-3.2-3B-Instruct-Q4_K_M.gguf",
+      "size_mb": 2020,
+      "license": "Llama 3.2 Community",
+      "good_for": ["jetson", "pc"],
+      "notes": "Strong roleplay quality for its size."
+    },
+    {
+      "id": "phi-3.5-mini-instruct-q4",
+      "name": "Phi-3.5 Mini Instruct (Q4_K_M)",
+      "kind": "gguf",
+      "url": "https://huggingface.co/bartowski/Phi-3.5-mini-instruct-GGUF/resolve/main/Phi-3.5-mini-instruct-Q4_K_M.gguf",
+      "filename": "Phi-3.5-mini-instruct-Q4_K_M.gguf",
+      "size_mb": 2400,
+      "license": "MIT",
+      "good_for": ["jetson", "pc"],
+      "notes": "Good reasoning, more formal voice."
+    },
+    {
+      "id": "gemma-2-2b-it-q4",
+      "name": "Gemma 2 2B Instruct (Q4_K_M)",
+      "kind": "gguf",
+      "url": "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_M.gguf",
+      "filename": "gemma-2-2b-it-Q4_K_M.gguf",
+      "size_mb": 1710,
+      "license": "Gemma Terms",
+      "good_for": ["jetson", "pc"],
+      "notes": "Friendly, concise replies."
+    }
+  ],
+  "asr": [
+    {
+      "id": "tiny.en",
+      "name": "Whisper tiny.en (faster-whisper)",
+      "kind": "hf-repo",
+      "repo": "Systran/faster-whisper-tiny.en",
+      "size_mb": 75,
+      "license": "MIT",
+      "good_for": ["raspberry-pi-5", "jetson", "pc"],
+      "notes": "Fastest. Recommended on a Raspberry Pi 5."
+    },
+    {
+      "id": "base.en",
+      "name": "Whisper base.en (faster-whisper)",
+      "kind": "hf-repo",
+      "repo": "Systran/faster-whisper-base.en",
+      "size_mb": 145,
+      "license": "MIT",
+      "good_for": ["raspberry-pi-5", "jetson", "pc"],
+      "notes": "Good accuracy/speed balance on CPU."
+    },
+    {
+      "id": "small.en",
+      "name": "Whisper small.en (faster-whisper)",
+      "kind": "hf-repo",
+      "repo": "Systran/faster-whisper-small.en",
+      "size_mb": 480,
+      "license": "MIT",
+      "good_for": ["jetson", "pc"],
+      "notes": "Recommended on a Jetson with CUDA."
+    },
+    {
+      "id": "distil-small.en",
+      "name": "Distil-Whisper small.en (faster-whisper)",
+      "kind": "hf-repo",
+      "repo": "Systran/faster-distil-whisper-small.en",
+      "size_mb": 470,
+      "license": "MIT",
+      "good_for": ["jetson", "pc"],
+      "notes": "small.en accuracy at roughly twice the speed."
+    },
+    {
+      "id": "medium.en",
+      "name": "Whisper medium.en (faster-whisper)",
+      "kind": "hf-repo",
+      "repo": "Systran/faster-whisper-medium.en",
+      "size_mb": 1530,
+      "license": "MIT",
+      "good_for": ["pc"],
+      "notes": "Best accuracy, needs a desktop GPU to stay conversational."
+    }
+  ],
+  "tts": [
+    {
+      "id": "en_US-amy-low",
+      "name": "Piper - Amy (US English, low)",
+      "kind": "piper",
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/low/en_US-amy-low.onnx",
+      "config_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/low/en_US-amy-low.onnx.json",
+      "filename": "en_US-amy-low.onnx",
+      "size_mb": 28,
+      "license": "MIT",
+      "good_for": ["raspberry-pi-5", "jetson", "pc"],
+      "notes": "Lowest latency voice. Recommended on a Raspberry Pi 5."
+    },
+    {
+      "id": "en_US-amy-medium",
+      "name": "Piper - Amy (US English, medium)",
+      "kind": "piper",
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/medium/en_US-amy-medium.onnx",
+      "config_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/medium/en_US-amy-medium.onnx.json",
+      "filename": "en_US-amy-medium.onnx",
+      "size_mb": 63,
+      "license": "MIT",
+      "good_for": ["raspberry-pi-5", "jetson", "pc"],
+      "notes": "Warm female voice, the general-purpose default."
+    },
+    {
+      "id": "en_US-lessac-medium",
+      "name": "Piper - Lessac (US English, medium)",
+      "kind": "piper",
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx",
+      "config_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json",
+      "filename": "en_US-lessac-medium.onnx",
+      "size_mb": 63,
+      "license": "BSD",
+      "good_for": ["raspberry-pi-5", "jetson", "pc"],
+      "notes": "Very clear, neutral narrator voice."
+    },
+    {
+      "id": "en_US-ryan-high",
+      "name": "Piper - Ryan (US English, high)",
+      "kind": "piper",
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/high/en_US-ryan-high.onnx",
+      "config_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/high/en_US-ryan-high.onnx.json",
+      "filename": "en_US-ryan-high.onnx",
+      "size_mb": 114,
+      "license": "BSD",
+      "good_for": ["jetson", "pc"],
+      "notes": "Male voice, highest quality tier."
+    },
+    {
+      "id": "en_GB-alba-medium",
+      "name": "Piper - Alba (British English, medium)",
+      "kind": "piper",
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/alba/medium/en_GB-alba-medium.onnx",
+      "config_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/alba/medium/en_GB-alba-medium.onnx.json",
+      "filename": "en_GB-alba-medium.onnx",
+      "size_mb": 63,
+      "license": "CC-BY-SA",
+      "good_for": ["raspberry-pi-5", "jetson", "pc"],
+      "notes": "Scottish female voice."
+    },
+    {
+      "id": "en_GB-northern_english_male-medium",
+      "name": "Piper - Northern English Male (medium)",
+      "kind": "piper",
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/northern_english_male/medium/en_GB-northern_english_male-medium.onnx",
+      "config_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/northern_english_male/medium/en_GB-northern_english_male-medium.onnx.json",
+      "filename": "en_GB-northern_english_male-medium.onnx",
+      "size_mb": 63,
+      "license": "CC-BY-SA",
+      "good_for": ["raspberry-pi-5", "jetson", "pc"],
+      "notes": "Male voice with a Yorkshire accent."
+    },
+    {
+      "id": "de_DE-thorsten-medium",
+      "name": "Piper - Thorsten (German, medium)",
+      "kind": "piper",
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/de/de_DE/thorsten/medium/de_DE-thorsten-medium.onnx",
+      "config_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/de/de_DE/thorsten/medium/de_DE-thorsten-medium.onnx.json",
+      "filename": "de_DE-thorsten-medium.onnx",
+      "size_mb": 63,
+      "license": "CC0",
+      "good_for": ["raspberry-pi-5", "jetson", "pc"],
+      "notes": "German male voice."
+    },
+    {
+      "id": "es_ES-davefx-medium",
+      "name": "Piper - DaveFx (Spanish, medium)",
+      "kind": "piper",
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/es/es_ES/davefx/medium/es_ES-davefx-medium.onnx",
+      "config_url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/es/es_ES/davefx/medium/es_ES-davefx-medium.onnx.json",
+      "filename": "es_ES-davefx-medium.onnx",
+      "size_mb": 63,
+      "license": "CC-BY",
+      "good_for": ["raspberry-pi-5", "jetson", "pc"],
+      "notes": "Castilian Spanish male voice."
+    }
+  ],
+  "image": [
+    {
+      "id": "sd-turbo",
+      "name": "Stable Diffusion Turbo",
+      "kind": "diffusers",
+      "repo": "stabilityai/sd-turbo",
+      "allow_patterns": ["*.json", "*.txt", "*fp16.safetensors", "*.safetensors"],
+      "size_mb": 2600,
+      "license": "STAI Non-Commercial",
+      "good_for": ["raspberry-pi-5", "jetson", "pc"],
+      "resolution": 512,
+      "steps": 4,
+      "guidance": 0.0,
+      "notes": "Portraits in 1-4 steps. The default everywhere."
+    },
+    {
+      "id": "sdxl-turbo",
+      "name": "SDXL Turbo",
+      "kind": "diffusers",
+      "repo": "stabilityai/sdxl-turbo",
+      "allow_patterns": ["*.json", "*.txt", "*fp16.safetensors"],
+      "size_mb": 6900,
+      "license": "STAI Non-Commercial",
+      "good_for": ["pc"],
+      "resolution": 512,
+      "steps": 4,
+      "guidance": 0.0,
+      "notes": "Much better faces, needs a desktop GPU."
+    },
+    {
+      "id": "tiny-sd",
+      "name": "Tiny SD (distilled SD 1.5)",
+      "kind": "diffusers",
+      "repo": "segmind/tiny-sd",
+      "allow_patterns": ["*.json", "*.txt", "*.safetensors"],
+      "size_mb": 1300,
+      "license": "Apache-2.0",
+      "good_for": ["raspberry-pi-5"],
+      "resolution": 384,
+      "steps": 12,
+      "guidance": 7.0,
+      "notes": "Smallest pipeline; the only comfortable option on a Pi."
+    },
+    {
+      "id": "lcm-dreamshaper-v7",
+      "name": "LCM Dreamshaper v7",
+      "kind": "diffusers",
+      "repo": "SimianLuo/LCM_Dreamshaper_v7",
+      "allow_patterns": ["*.json", "*.txt", "*.safetensors"],
+      "size_mb": 4200,
+      "license": "CreativeML OpenRAIL-M",
+      "good_for": ["jetson", "pc"],
+      "resolution": 512,
+      "steps": 6,
+      "guidance": 1.5,
+      "notes": "Stylised character art in a handful of steps."
+    },
+    {
+      "id": "dreamshaper-8",
+      "name": "Dreamshaper 8",
+      "kind": "diffusers",
+      "repo": "Lykon/dreamshaper-8",
+      "allow_patterns": ["*.json", "*.txt", "*.safetensors"],
+      "size_mb": 4200,
+      "license": "CreativeML OpenRAIL-M",
+      "good_for": ["pc"],
+      "resolution": 512,
+      "steps": 25,
+      "guidance": 7.0,
+      "notes": "Best-looking characters, slowest of the SD 1.5 family."
+    }
+  ]
+}

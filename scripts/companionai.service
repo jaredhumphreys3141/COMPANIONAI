@@ -1,0 +1,31 @@
+# Run CompanionAI as a service, so a Raspberry Pi or Jetson kiosk comes up
+# talking after a reboot.
+#
+#   sudo cp scripts/companionai.service /etc/systemd/system/
+#   sudo systemctl edit companionai      # adjust User= and paths if needed
+#   sudo systemctl enable --now companionai
+#
+[Unit]
+Description=CompanionAI local AI companion
+After=network.target sound.target
+
+[Service]
+Type=simple
+User=%i
+WorkingDirectory=/opt/companionai
+Environment=COMPANIONAI_HOME=/var/lib/companionai
+# 0.0.0.0 makes the interface reachable from other devices on the LAN.
+ExecStart=/opt/companionai/.venv/bin/python -m companionai --host 0.0.0.0 --no-browser
+Restart=on-failure
+RestartSec=5
+# The app is offline by default; these keep it that way at the OS level too.
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/companionai
+ProtectHome=read-only
+# Audio and (on a Jetson) the GPU.
+SupplementaryGroups=audio video render
+
+[Install]
+WantedBy=multi-user.target
