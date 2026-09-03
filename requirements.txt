@@ -1,4 +1,8 @@
 # Minimum install: the GUI only.  Model runtimes live in the files below, and
 # scripts/install.sh picks the right ones for your board.
-gradio>=4.44
+#
+# Python 3.10 or newer.  Gradio 5+ and huggingface_hub 1.x both require it, and
+# on 3.9 pip resolves back to a Gradio 4 that cannot import against a current
+# huggingface_hub.
+gradio>=5.0
 numpy>=1.24

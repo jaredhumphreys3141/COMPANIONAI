@@ -3,6 +3,10 @@
 CompanionAI detects the machine at start-up and picks defaults for it. This
 page covers what the installer cannot do for you.
 
+**Python 3.10 or newer is required** on every board — Gradio 5+ needs it.
+Raspberry Pi OS Bookworm ships 3.11 and JetPack 6 ships 3.10, so the stock
+image is fine in both cases.
+
 ## Raspberry Pi 5
 
 Works well, with a pause between turns. 8 GB is comfortable; 4 GB works with a
@@ -56,7 +60,7 @@ Notes:
   a partially offloaded model is slower than a smaller fully offloaded one.
 - The original Jetson Nano (Maxwell, JetPack 4.6, Python 3.6) cannot run this
   app's Python requirements. Orin Nano and newer are the supported targets;
-  the older board works only with a separately built Python 3.9+ toolchain.
+  the older board works only with a separately built Python 3.10+ toolchain.
 - The iGPU shares system memory. If image generation ever gets killed, press
   *Free memory* on the System tab before rendering, or use `sd-turbo` at 512px.
 

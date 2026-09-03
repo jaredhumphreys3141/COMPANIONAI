@@ -32,9 +32,10 @@ from .. import character as character_mod
 from .theme import CSS, theme
 
 # Gradio moved `theme`/`css` from Blocks() to launch(), and made the messages
-# chat format the only one, in version 6.  Supporting both keeps CompanionAI
-# installable from whatever wheel a Raspberry Pi or JetPack image happens to
-# have pinned.
+# chat format the only one, in version 6.  Handling both keeps CompanionAI
+# working on Gradio 5 as well, which is what a Raspberry Pi or JetPack image
+# may already have pinned.  (Gradio 4 is not supported: it cannot import
+# against huggingface_hub 1.x.)
 _GRADIO_MAJOR = int(gr.__version__.split(".")[0])
 _LEGACY_GRADIO = _GRADIO_MAJOR < 6
 
@@ -121,7 +122,7 @@ FIELDS = [
 
 def _to_character(base: character_mod.Character, values: list) -> character_mod.Character:
     data = base.as_dict()
-    for name, value in zip(FIELDS, values):
+    for name, value in zip(FIELDS, values, strict=True):
         if value is None:
             continue
         data[name] = value
@@ -842,7 +843,7 @@ Your conversations, audio and images are never uploaded, whatever this is set to
             def apply_audio(*values):
                 keys = ["input_device", "output_device", "mic_gain", "vad_aggressiveness",
                         "silence_ms", "min_speech_ms", "barge_in"]
-                payload = dict(zip(keys, values))
+                payload = dict(zip(keys, values, strict=True))
                 payload["vad_aggressiveness"] = int(payload["vad_aggressiveness"])
                 payload["silence_ms"] = int(payload["silence_ms"])
                 payload["min_speech_ms"] = int(payload["min_speech_ms"])
