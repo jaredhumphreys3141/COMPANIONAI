@@ -1,0 +1,11 @@
+# Character image generation.
+#
+# Jetson: do NOT install torch from here - it has no CUDA support for Tegra.
+# Install NVIDIA's JetPack torch wheel first, then run
+#   pip install diffusers transformers accelerate safetensors pillow
+torch>=2.1
+diffusers>=0.31
+transformers>=4.44
+accelerate>=0.34
+safetensors>=0.4
+pillow>=10.0

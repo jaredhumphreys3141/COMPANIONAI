@@ -1,0 +1,7 @@
+# Talking and listening.  Works on a PC, a Raspberry Pi 5 and a Jetson.
+llama-cpp-python>=0.3.2
+faster-whisper>=1.0.3
+piper-tts>=1.2.0
+sounddevice>=0.4.6
+webrtcvad>=2.0.10
+huggingface-hub>=0.24

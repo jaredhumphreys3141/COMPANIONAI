@@ -1,0 +1,4 @@
+# Minimum install: the GUI only.  Model runtimes live in the files below, and
+# scripts/install.sh picks the right ones for your board.
+gradio>=4.44
+numpy>=1.24
