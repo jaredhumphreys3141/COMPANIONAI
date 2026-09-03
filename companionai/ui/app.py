@@ -71,7 +71,15 @@ def _err(exc: Exception) -> str:
 def _net_badge() -> str:
     status = net.status()
     css_class = "net-offline" if not status.allowed else "net-online"
-    return f"<span class='net-badge {css_class}'>{status.badge}</span>"
+    short = "OFFLINE" if not status.allowed else "ONLINE"
+    # Both labels are emitted and CSS picks one, so a 7" Pi touchscreen shows
+    # "OFFLINE" while a desktop shows the full sentence.
+    return (
+        f"<span class='net-badge {css_class}' title='{status.badge}'>"
+        f"<span class='net-badge-long'>{status.badge}</span>"
+        f"<span class='net-badge-short'>{short}</span>"
+        "</span>"
+    )
 
 
 def _character_choices() -> list[str]:
@@ -149,11 +157,11 @@ def build() -> gr.Blocks:
         with gr.Row(elem_classes="companion-header"):
             gr.HTML("<h1>CompanionAI</h1>")
             net_badge = gr.HTML(_net_badge())
-            header_status = gr.Markdown(state.summary())
+            header_status = gr.Markdown(state.summary(), elem_classes="companion-subtle")
 
         with gr.Tabs():
-            _talk_tab(state, net_badge, header_status)
-            studio_refs = _studio_tab(state, header_status)
+            talk_refs = _talk_tab(state, net_badge, header_status)
+            studio_refs = _studio_tab(state, header_status, talk_refs)
             _images_tab(state)
             _models_tab(state, net_badge, studio_refs)
             _settings_tab(state, net_badge)
@@ -165,8 +173,8 @@ def build() -> gr.Blocks:
 # --------------------------------------------------------------------------- #
 # Talk
 # --------------------------------------------------------------------------- #
-def _talk_tab(state: session.Session, net_badge, header_status) -> None:
-    with gr.Tab("Talk"):
+def _talk_tab(state: session.Session, net_badge, header_status) -> dict:
+    with gr.Tab("Talk") as talk_tab:
         with gr.Row():
             with gr.Column(scale=3):
                 chat = _chatbot(
@@ -191,9 +199,14 @@ def _talk_tab(state: session.Session, net_badge, header_status) -> None:
                 )
 
             with gr.Column(scale=1, min_width=240):
+                # Guard against the active companion having been deleted from
+                # disk: an out-of-range value renders as a blank dropdown.
+                _choices = _character_choices()
+                _active = (state.character.id if state.character.id in _choices
+                           else (_choices[0] or None))
                 who = gr.Dropdown(
-                    choices=_character_choices(),
-                    value=state.character.id,
+                    choices=_choices,
+                    value=_active,
                     label="Companion",
                     interactive=True,
                 )
@@ -312,11 +325,20 @@ def _talk_tab(state: session.Session, net_badge, header_status) -> None:
 
         timer.tick(poll, None, [chat, status, net_badge])
 
+        # The dropdown's choices are baked in when the page is built, so
+        # companions created later have to be pushed in.  The Studio does that
+        # directly; re-reading on tab open covers everything else.
+        talk_tab.select(
+            lambda: gr.update(choices=_character_choices()), None, who, queue=False
+        )
+
+    return {"who": who, "chat": chat, "status": status}
+
 
 # --------------------------------------------------------------------------- #
 # Character Studio
 # --------------------------------------------------------------------------- #
-def _studio_tab(state: session.Session, header_status) -> dict:
+def _studio_tab(state: session.Session, header_status, talk_refs: dict) -> dict:
     character = state.character
 
     with gr.Tab("Studio"):
@@ -472,24 +494,32 @@ def _studio_tab(state: session.Session, header_status) -> dict:
             try:
                 updated.save()
             except OSError as exc:
-                return (gr.update(), f"Could not save: {exc}", gr.update(), gr.update())
+                return (gr.update(), f"Could not save: {exc}", gr.update(),
+                        gr.update(), gr.update())
             if activate or updated.id == state.character.id:
                 state.refresh_character(updated)
             note = f"Saved **{updated.name}**."
             if missing:
                 listed = ", ".join(f"{kind}:{model}" for kind, model in missing)
                 note += f"  Still to install from the Models tab: {listed}."
+            # Only move the Talk tab's selection when this companion actually
+            # became the active one; a plain Save must not reset the chat.
+            talk_update = gr.update(choices=_character_choices())
+            if activate:
+                talk_update = gr.update(choices=_character_choices(), value=updated.id)
             return (
                 gr.update(choices=_character_choices(), value=updated.id),
                 note,
                 updated.system_prompt(),
                 state.summary(),
+                talk_update,
             )
 
-        save_btn.click(save, inputs, [picker, studio_status, prompt_preview, header_status])
+        save_btn.click(save, inputs,
+                       [picker, studio_status, prompt_preview, header_status, talk_refs["who"]])
         activate_btn.click(
             lambda *values: save(*values, activate=True),
-            inputs, [picker, studio_status, prompt_preview, header_status],
+            inputs, [picker, studio_status, prompt_preview, header_status, talk_refs["who"]],
         )
 
         def load_character(character_id: str):
@@ -518,9 +548,10 @@ def _studio_tab(state: session.Session, header_status) -> dict:
                 gr.update(choices=_character_choices(), value=fresh.id),
                 f"Created **{fresh.name}** with defaults for this hardware.",
                 "",
+                gr.update(choices=_character_choices(), value=fresh.id),
             )
 
-        new_btn.click(create, new_name, [picker, studio_status, new_name])
+        new_btn.click(create, new_name, [picker, studio_status, new_name, talk_refs["who"]])
 
         def duplicate(name_value: str, *values):
             source = _current(list(values))
@@ -530,26 +561,29 @@ def _studio_tab(state: session.Session, header_status) -> dict:
                 gr.update(choices=_character_choices(), value=clone.id),
                 f"Duplicated to **{clone.name}**.",
                 "",
+                gr.update(choices=_character_choices()),
             )
 
-        dup_btn.click(duplicate, [new_name] + inputs, [picker, studio_status, new_name])
+        dup_btn.click(duplicate, [new_name] + inputs,
+                      [picker, studio_status, new_name, talk_refs["who"]])
 
         def delete(character_id: str):
             ids = character_mod.list_ids()
             if len(ids) <= 1:
-                return gr.update(), "Keep at least one companion."
+                return gr.update(), "Keep at least one companion.", gr.update()
             try:
                 character_mod.Character.load(character_id).delete()
             except Exception as exc:
-                return gr.update(), _err(exc)
+                return gr.update(), _err(exc), gr.update()
             remaining = character_mod.list_ids()
             state.use_character(remaining[0])
             return (
                 gr.update(choices=remaining, value=remaining[0]),
                 f"Deleted `{character_id}`.",
+                gr.update(choices=remaining, value=remaining[0]),
             )
 
-        del_btn.click(delete, picker, [picker, studio_status])
+        del_btn.click(delete, picker, [picker, studio_status, talk_refs["who"]])
 
         def preview_voice(*values):
             updated = _current(list(values))

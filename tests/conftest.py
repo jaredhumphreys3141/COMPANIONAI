@@ -22,7 +22,12 @@ def isolated_home(tmp_path, monkeypatch):
         importlib.reload(module)
 
     import companionai.config as config
+    import companionai.session as session
 
     config._settings = None
+    # The session holds the active character and would otherwise carry a
+    # companion from a previous test into this test's empty data directory.
+    session._session = None
     paths.ensure_dirs()
     yield tmp_path
+    session._session = None
