@@ -216,16 +216,24 @@ class Session:
             reply_text = ""
             self._played = []
             try:
+                interrupted = False
                 for full, sentence in self.conversation.stream_reply(user_text):
                     reply_text = full
-                    if voice.loop().interrupted.is_set():
+                    if not interrupted and voice.loop().interrupted.is_set():
                         # Spoken interruption: keep only what the user heard.
+                        interrupted = True
                         self.conversation.stop(
                             spoken_only=True, spoken_text=" ".join(self._played)
                         )
                         self.silence()
                         self.status = "interrupted"
-                        break
+                    if interrupted:
+                        # Deliberately not `break`: abandoning the generator
+                        # skips the code that stores the turn, so the companion
+                        # would remember saying nothing at all.  Draining it
+                        # lets it finish and record what was actually heard -
+                        # the underlying loop stops at the next chunk anyway.
+                        continue
                     if sentence:
                         spoke_anything = True
                         self.status = "speaking"

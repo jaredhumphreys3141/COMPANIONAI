@@ -61,7 +61,13 @@ class LlamaCppEngine:
         # One llama.cpp context is not safe to generate from concurrently, and
         # memory extraction runs on a background thread while the user may be
         # sending the next message.  Generations queue instead of colliding.
-        self._gen_lock = threading.RLock()
+        #
+        # A plain Lock, deliberately, not an RLock: this is held across yields,
+        # and an abandoned generator is finalised on whichever thread drops the
+        # last reference - which is not the thread that acquired it when the
+        # user interrupts.  An RLock refuses to be released by a thread that
+        # does not own it and raises "cannot release un-acquired lock".
+        self._gen_lock = threading.Lock()
         self.cancel = threading.Event()
 
     # ------------------------------------------------------------------ load
@@ -127,9 +133,10 @@ class LlamaCppEngine:
         )
         if character.seed is not None and character.seed >= 0:
             kwargs["seed"] = character.seed
-        # Held for the life of the generator; released when it finishes or the
-        # caller closes it.
-        with self._gen_lock:
+        # Held for the life of the generator and released when it finishes, is
+        # closed, or is finalised - see the note on _gen_lock above.
+        self._gen_lock.acquire()
+        try:
             for chunk in self._llm.create_chat_completion(**kwargs):
                 if self.cancel.is_set():
                     break
@@ -137,6 +144,8 @@ class LlamaCppEngine:
                 piece = delta.get("content")
                 if piece:
                     yield piece
+        finally:
+            self._gen_lock.release()
 
 
 class OllamaEngine:

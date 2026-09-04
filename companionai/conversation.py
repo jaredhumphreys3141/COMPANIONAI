@@ -163,17 +163,24 @@ class Conversation:
         buffer = ""
         full = ""
 
-        for piece in engine.stream_chat(self.character, self.messages()):
-            if self.stop_flag.is_set():
-                break
-            full += piece
-            buffer += piece
-            sentence, buffer = _split_ready(buffer)
-            if sentence:
-                self.dispatched += (" " if self.dispatched else "") + sentence
-                yield full, sentence
-            else:
-                yield full, ""
+        # Closed explicitly rather than left to the garbage collector: the
+        # engine holds its generation lock for the life of this generator, and
+        # a deferred finalisation would leave the next reply waiting on it.
+        stream = engine.stream_chat(self.character, self.messages())
+        try:
+            for piece in stream:
+                if self.stop_flag.is_set():
+                    break
+                full += piece
+                buffer += piece
+                sentence, buffer = _split_ready(buffer)
+                if sentence:
+                    self.dispatched += (" " if self.dispatched else "") + sentence
+                    yield full, sentence
+                else:
+                    yield full, ""
+        finally:
+            stream.close()
 
         tail = buffer.strip()
         if tail and not self.stop_flag.is_set():

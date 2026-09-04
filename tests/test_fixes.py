@@ -213,3 +213,99 @@ def test_word_overlap_scoring():
     assert _overlap("the sky is blue today", "The Sky is BLUE today") == 1.0
     assert _overlap("the sky is blue today", "completely different words") == 0.0
     assert 0.4 < _overlap("hello there the sky is blue", "hello the sky") < 0.9
+
+
+# --------------------------------------------------------------------------- #
+# generator lifetime and locking
+# --------------------------------------------------------------------------- #
+def test_abandoned_generation_releases_the_lock_from_another_thread():
+    """Reported from a Pi as "cannot release un-acquired lock".
+
+    The engine holds its generation lock across yields.  When the user
+    interrupts, the generator is abandoned and finalised on whichever thread
+    drops the last reference - not the one that acquired the lock.  An
+    owner-checked RLock raises there; a plain Lock does not.
+    """
+    import threading
+
+    from companionai import llm
+
+    engine = llm.LlamaCppEngine()
+    assert not isinstance(engine._gen_lock, type(threading.RLock())), (
+        "the generation lock is held across yields, so it must be releasable "
+        "by a thread other than the one that acquired it"
+    )
+
+    engine._llm = object()          # never reached; load() is bypassed below
+    engine._key = ("stub", 0, 0, 0)
+
+    def fake_completion(**_kwargs):
+        for index in range(100):
+            yield {"choices": [{"delta": {"content": f"word{index} "}}]}
+
+    engine._llm = type("Stub", (), {"create_chat_completion": staticmethod(fake_completion)})()
+    engine.load = lambda character: None
+
+    character = character_mod.Character()
+    holder = []
+
+    def start_and_abandon():
+        stream = engine.stream_chat(character, [{"role": "user", "content": "hi"}])
+        next(stream)
+        holder.append(stream)       # lock now held, acquired on this thread
+
+    thread = threading.Thread(target=start_and_abandon)
+    thread.start()
+    thread.join()
+
+    errors = []
+
+    def finalise_elsewhere():
+        try:
+            holder[0].close()       # a different thread unwinds the finally
+        except Exception as exc:    # pragma: no cover - the bug being fixed
+            errors.append(exc)
+
+    other = threading.Thread(target=finalise_elsewhere)
+    other.start()
+    other.join()
+    assert not errors, f"closing from another thread raised {errors}"
+
+    # And the lock really is free, so the next reply does not hang.
+    assert engine._gen_lock.acquire(timeout=2), "generation lock was never released"
+    engine._gen_lock.release()
+
+
+def test_barge_in_through_the_session_still_records_the_turn(monkeypatch):
+    """The session used to `break` out of the reply generator on a barge-in.
+
+    That abandoned it before the code that stores the assistant turn, so an
+    interrupted companion remembered saying nothing at all - and the
+    truncation fix never actually ran in the real path.
+    """
+    from companionai import llm, session, voice
+
+    monkeypatch.setattr(llm, "engine", lambda backend=None: ChattyEngine())
+    session._session = None
+    state = session.get()
+    state.speak_replies = False
+
+    # Stand in for the speech worker: an utterance handed to say() is treated
+    # as having finished playing, which is what _played records.
+    monkeypatch.setattr(state, "say", lambda text: state._played.append(text))
+    # The user cuts in once one sentence has been heard.
+    monkeypatch.setattr(
+        voice.loop().interrupted, "is_set", lambda: len(state._played) >= 1
+    )
+
+    list(state.reply_stream("go"))
+
+    history = state.conversation.as_chat_pairs()
+    assert [turn["role"] for turn in history] == ["user", "assistant"], (
+        "an interrupted reply must still be recorded"
+    )
+    stored = history[-1]["content"]
+    assert stored == " ".join(state._played)
+    assert "first thing" in stored
+    assert "fourth remark" not in stored, "unheard text must not be remembered"
+    assert state.status == "interrupted"
