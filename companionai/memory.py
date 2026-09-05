@@ -229,15 +229,17 @@ _SUMMARY_SYSTEM = (
 )
 
 
-def _tuned(character, system_prompt: str, max_tokens: int):
+def _tuned(character, max_tokens: int):
     """A copy of the character wired for extraction rather than conversation.
 
-    The model path, context size, threads and GPU layers are left alone so the
-    already-loaded model is reused instead of being reloaded.
+    Sampling only.  The model path, context size, threads and GPU layers are
+    left alone so the already-loaded model is reused instead of reloaded, and
+    the instructions travel as a system message rather than on the character:
+    the engines pass the message list straight to the model and never read a
+    character's prompt fields.
     """
     data = character.as_dict()
     data.update(
-        custom_system_prompt=system_prompt,
         temperature=0.2,
         top_p=0.9,
         top_k=20,
@@ -288,9 +290,13 @@ def _parse_facts(reply: str, source: str) -> list[str]:
     return out[:5]
 
 
-def _complete(engine, character, prompt: str) -> str:
+def _complete(engine, character, system: str, prompt: str) -> str:
+    messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": prompt},
+    ]
     try:
-        return "".join(engine.stream_chat(character, [{"role": "user", "content": prompt}]))
+        return "".join(engine.stream_chat(character, messages))
     except Exception:
         return ""  # a failed extraction must never disturb the conversation
 
@@ -307,7 +313,7 @@ def extract(memory: Memory, character, turns, engine) -> tuple[int, bool]:
     user_said = "\n".join(t.content for t in turns if t.role == "user")
 
     added = 0
-    reply = _complete(engine, _tuned(character, _FACT_SYSTEM, 160), exchange)
+    reply = _complete(engine, _tuned(character, 160), _FACT_SYSTEM, exchange)
     if reply:
         # Ground facts against what the user actually said, not the whole
         # exchange, so the companion's own inventions cannot validate themselves.
@@ -319,7 +325,9 @@ def extract(memory: Memory, character, turns, engine) -> tuple[int, bool]:
             f"Previous summary: {memory.summary or '(none yet)'}\n\n"
             f"Recent conversation:\n{exchange}"
         )
-        new_summary = _complete(engine, _tuned(character, _SUMMARY_SYSTEM, 180), prompt).strip()
+        new_summary = _complete(
+            engine, _tuned(character, 180), _SUMMARY_SYSTEM, prompt
+        ).strip()
         if new_summary and len(new_summary) > 20:
             memory.summary = new_summary[:800]
             summarised = True

@@ -16,7 +16,10 @@ class FakeEngine:
         self.prompts = []
 
     def stream_chat(self, character, messages):
-        system = character.custom_system_prompt
+        # Read the system message, exactly as llama.cpp and Ollama do - a real
+        # engine never looks at the character's prompt fields.
+        assert messages[0]["role"] == "system", "extraction must send instructions"
+        system = messages[0]["content"]
         self.prompts.append(messages[-1]["content"])
         reply = self.summary if "running summary" in system else self.facts
         for word in reply.split(" "):
